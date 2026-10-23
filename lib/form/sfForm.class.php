@@ -246,9 +246,9 @@ class sfForm implements ArrayAccess, Iterator, Countable
             $this->errorSchema = $e;
         }
 
-        if ($this->embeddedForms) {
-            $this->bindEmbeddedForms($this->taintedValues, $this->taintedFiles);
-        }
+//        if ($this->embeddedForms) {
+//            $this->bindEmbeddedForms($this->taintedValues, $this->taintedFiles);
+//        }
     }
 
     /**
