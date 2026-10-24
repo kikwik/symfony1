@@ -54,7 +54,13 @@ EOF;
         $config = $this->getCliConfig();
 
         Doctrine_Core::loadModels($config['models_path'], Doctrine_Core::MODEL_LOADING_CONSERVATIVE);
-        Doctrine_Core::createTablesFromArray(Doctrine_Core::getLoadedModels());
+        $connection = Doctrine_Manager::connection();
+        $sql = Doctrine_Core::generateSqlFromArray(Doctrine_Core::getLoadedModels());
+
+        foreach ($sql as $query) {
+            $this->logSection('doctrine', $query, null, 'COMMENT');
+            $connection->execute($query);
+        }
 
         $this->logSection('doctrine', 'created tables successfully');
     }
