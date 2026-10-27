@@ -246,43 +246,43 @@ class sfForm implements ArrayAccess, Iterator, Countable
             $this->errorSchema = $e;
         }
 
-        if ($this->embeddedForms) {
-            $this->bindEmbeddedForms($this->taintedValues, $this->taintedFiles);
-        }
+//        if ($this->embeddedForms) {
+//            $this->bindEmbeddedForms($this->taintedValues, $this->taintedFiles);
+//        }
     }
 
-    /**
-     * Bind embedded forms (recursivly).
-     */
-    public function bindEmbeddedForms(?array $taintedValues = null, ?array $taintedFiles = null)
-    {
-        foreach ($this->embeddedForms as $name => $form) {
-            // remove CSRF token
-            unset($form[self::$CSRFFieldName]);
-
-            // bind
-            $form->bind(
-                isset($taintedValues[$name]) ? $taintedValues[$name] : [],
-                isset($taintedFiles[$name]) ? $taintedFiles[$name] : []
-            );
-
-            // set values for current form
-            $this->values[$name] = $form->getValues();
-
-            // set widget schema for current form
-            $widgetSchema = $form->getWidgetSchema();
-            $decorator = $widgetSchema->getFormFormatter()->getDecoratorFormat();
-            $this->widgetSchema[$name] = new sfWidgetFormSchemaDecorator($widgetSchema, $decorator);
-
-            // keep widgetSchema synchronized
-            $form->setWidgetSchema($this->widgetSchema[$name]->getWidget());
-
-            // update errorSchema
-            if ($form->hasErrors()) {
-                $this->errorSchema->addError($form->getErrorSchema(), $name);
-            }
-        }
-    }
+//    /**
+//     * Bind embedded forms (recursivly).
+//     */
+//    public function bindEmbeddedForms(?array $taintedValues = null, ?array $taintedFiles = null)
+//    {
+//        foreach ($this->embeddedForms as $name => $form) {
+//            // remove CSRF token
+//            unset($form[self::$CSRFFieldName]);
+//
+//            // bind
+//            $form->bind(
+//                isset($taintedValues[$name]) ? $taintedValues[$name] : [],
+//                isset($taintedFiles[$name]) ? $taintedFiles[$name] : []
+//            );
+//
+//            // set values for current form
+//            $this->values[$name] = $form->getValues();
+//
+//            // set widget schema for current form
+//            $widgetSchema = $form->getWidgetSchema();
+//            $decorator = $widgetSchema->getFormFormatter()->getDecoratorFormat();
+//            $this->widgetSchema[$name] = new sfWidgetFormSchemaDecorator($widgetSchema, $decorator);
+//
+//            // keep widgetSchema synchronized
+//            $form->setWidgetSchema($this->widgetSchema[$name]->getWidget());
+//
+//            // update errorSchema
+//            if ($form->hasErrors()) {
+//                $this->errorSchema->addError($form->getErrorSchema(), $name);
+//            }
+//        }
+//    }
 
     /**
      * Returns true if the form is bound to input values.
@@ -442,13 +442,67 @@ class sfForm implements ArrayAccess, Iterator, Countable
         $decorator = null === $decorator ? $widgetSchema->getFormFormatter()->getDecoratorFormat() : $decorator;
 
         $this->widgetSchema[$name] = new sfWidgetFormSchemaDecorator($widgetSchema, $decorator);
-        $this->validatorSchema[$name] = new sfValidatorPass();
-
-        // keep widgetSchema synchronized
-        $form->setWidgetSchema($this->widgetSchema[$name]->getWidget());
+        $this->validatorSchema[$name] = $form->getValidatorSchema();
 
         $this->resetFormFields();
     }
+
+        /**
+         * Embeds a sfForm into the current form n times.
+         *
+         * @param string  $name             The field name
+         * @param sfForm  $form             A sfForm instance
+         * @param integer $n                The number of times to embed the form
+         * @param string  $decorator        A HTML decorator for the main form around embedded forms
+         * @param string  $innerDecorator   A HTML decorator for each embedded form
+         * @param array   $options          Options for schema
+         * @param array   $attributes       Attributes for schema
+         * @param array   $labels           Labels for schema
+         */
+        public function embedFormForEach($name, sfForm $form, $n, $decorator = null, $innerDecorator = null, $options = array(), $attributes = array(), $labels = array())
+        {
+            if (true === $this->isBound() || true === $form->isBound())
+            {
+                throw new LogicException('A bound form cannot be embedded');
+            }
+
+            $this->embeddedForms[$name] = new sfForm();
+
+            $form = clone $form;
+            unset($form[self::$CSRFFieldName]);
+
+            $widgetSchema = $form->getWidgetSchema();
+
+            // generate default values
+            $defaults = array();
+            for ($i = 0; $i < $n; $i++)
+            {
+                $defaults[$i] = $form->getDefaults();
+
+                $this->embeddedForms[$name]->embedForm($i, $form);
+            }
+
+            $this->setDefault($name, $defaults);
+
+            $decorator = null === $decorator ? $widgetSchema->getFormFormatter()->getDecoratorFormat() : $decorator;
+            $innerDecorator = null === $innerDecorator ? $widgetSchema->getFormFormatter()->getDecoratorFormat() : $innerDecorator;
+
+            $this->widgetSchema[$name] = new sfWidgetFormSchemaDecorator(new sfWidgetFormSchemaForEach(new sfWidgetFormSchemaDecorator($widgetSchema, $innerDecorator), $n, $options, $attributes), $decorator);
+            $this->validatorSchema[$name] = new sfValidatorSchemaForEach($form->getValidatorSchema(), $n);
+
+            // generate labels
+            for ($i = 0; $i < $n; $i++)
+            {
+                if (!isset($labels[$i]))
+                {
+                    $labels[$i] = sprintf('%s (%s)', $this->widgetSchema->getFormFormatter()->generateLabelName($name), $i);
+                }
+            }
+
+            $this->widgetSchema[$name]->setLabels($labels);
+
+            $this->resetFormFields();
+        }
 
     /**
      * Gets the list of embedded forms.
